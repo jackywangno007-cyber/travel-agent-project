@@ -255,6 +255,10 @@ export function useEditableTripPlan() {
     persist();
   }
 
+  function getDayPlan(dayNumber: number) {
+    return findDay(dayNumber);
+  }
+
   const totalAttractions = computed(() =>
     tripPlan.value?.daily_plan.reduce((sum, day) => sum + day.attractions.length, 0) ?? 0
   );
@@ -268,5 +272,6 @@ export function useEditableTripPlan() {
     deleteAttraction,
     moveAttraction,
     replaceDayPlan,
+    getDayPlan,
   };
 }

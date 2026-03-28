@@ -286,13 +286,41 @@ async function exportAsPdf() {
   justify-content: flex-end;
 }
 
+.export-actions button {
+  padding: 11px 16px;
+  border: 1px solid rgba(219, 234, 254, 0.92);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  color: #1d4ed8;
+  cursor: pointer;
+  font-weight: 700;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.06);
+}
+
+.export-actions button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(191, 219, 254, 0.96);
+  box-shadow: 0 16px 28px rgba(29, 78, 216, 0.12);
+}
+
+.export-actions button:disabled {
+  opacity: 0.72;
+  cursor: not-allowed;
+}
+
 .feedback {
   margin: 0;
   color: #15803d;
   font-size: 13px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: #f0fdf4;
+  border: 1px solid rgba(187, 247, 208, 0.9);
 }
 
 .feedback.error {
   color: #dc2626;
+  background: #fef2f2;
+  border-color: rgba(254, 202, 202, 0.9);
 }
 </style>

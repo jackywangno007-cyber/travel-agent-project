@@ -5,6 +5,7 @@ from app.agents.planner_agent import build_trip_plan
 from app.agents.weather_agent import get_weather
 from app.schemas.request import RegenerateDayRequest, TripPlanRequest
 from app.schemas.response import DayPlan, TripPlanResponse
+from app.services.preference_parser import build_preference_tags, parse_preferences
 from app.utils.date_utils import build_date_range
 
 
@@ -35,6 +36,12 @@ def _normalize_trip_plan_meals(
     return trip_plan
 
 
+def _prepare_preferences(raw_preferences):
+    parsed_preferences = parse_preferences(raw_preferences)
+    effective_preferences = build_preference_tags(parsed_preferences, raw_preferences)
+    return parsed_preferences, effective_preferences
+
+
 def generate_trip_plan(request: TripPlanRequest) -> TripPlanResponse:
     """
     编排器：
@@ -47,10 +54,12 @@ def generate_trip_plan(request: TripPlanRequest) -> TripPlanResponse:
     """
 
     dates = build_date_range(request.start_date, request.end_date)
+    parsed_preferences, effective_preferences = _prepare_preferences(request.preferences)
+    effective_request = request.model_copy(update={"preferences": effective_preferences})
 
     attractions = get_attractions(
         destination=request.destination,
-        preferences=request.preferences,
+        preferences=effective_preferences,
     )
 
     weather_list = get_weather(
@@ -65,21 +74,23 @@ def generate_trip_plan(request: TripPlanRequest) -> TripPlanResponse:
 
     meal_candidates = get_meal_candidates(
         destination=request.destination,
+        preferences=effective_preferences,
     )
 
     trip_plan = build_trip_plan(
-        request=request,
+        request=effective_request,
         attractions=attractions,
         weather_list=weather_list,
         hotel=hotel,
         meal_candidates=meal_candidates,
     )
-
-    return _normalize_trip_plan_meals(
+    trip_plan = _normalize_trip_plan_meals(
         trip_plan=trip_plan,
         request=request,
         meal_candidates=meal_candidates,
     )
+    trip_plan.parsed_preferences = parsed_preferences
+    return trip_plan
 
 
 def regenerate_trip_day(request: RegenerateDayRequest) -> DayPlan:
@@ -99,18 +110,20 @@ def regenerate_trip_day(request: RegenerateDayRequest) -> DayPlan:
             if attraction.category
         ]
 
+    parsed_preferences, effective_tags = _prepare_preferences(effective_preferences)
+
     pseudo_request = TripPlanRequest(
         origin=trip_plan.destination,
         destination=trip_plan.destination,
         start_date=current_day.date,
         end_date=current_day.date,
         budget=current_day.estimated_cost,
-        preferences=effective_preferences,
+        preferences=effective_tags,
     )
 
     attractions = get_attractions(
         destination=trip_plan.destination,
-        preferences=effective_preferences,
+        preferences=effective_tags,
     )
 
     used_by_other_days = {
@@ -133,7 +146,10 @@ def regenerate_trip_day(request: RegenerateDayRequest) -> DayPlan:
         budget=current_day.estimated_cost,
     )
 
-    meal_candidates = get_meal_candidates(destination=trip_plan.destination)
+    meal_candidates = get_meal_candidates(
+        destination=trip_plan.destination,
+        preferences=effective_tags,
+    )
 
     regenerated = build_trip_plan(
         request=pseudo_request,
@@ -148,6 +164,7 @@ def regenerate_trip_day(request: RegenerateDayRequest) -> DayPlan:
         request=pseudo_request,
         meal_candidates=meal_candidates,
     )
+    regenerated.parsed_preferences = parsed_preferences
 
     new_day = regenerated.daily_plan[0]
     new_day.day = current_day.day

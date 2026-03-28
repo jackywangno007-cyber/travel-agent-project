@@ -34,6 +34,41 @@ MEAL_SLOT_CONFIG = {
 }
 
 
+def _normalize_preferences(preferences: Optional[List[str]]) -> List[str]:
+    if not preferences:
+        return []
+
+    normalized: List[str] = []
+    for item in preferences:
+        text = item.strip()
+        if text and text not in normalized:
+            normalized.append(text)
+    return normalized
+
+
+def _keywords_for_slot(slot: str, preferences: Optional[List[str]]) -> List[str]:
+    keywords = list(MEAL_SLOT_CONFIG[slot]["keywords"])
+    normalized = _normalize_preferences(preferences)
+
+    if "美食" in normalized:
+        if slot in {"lunch", "dinner"}:
+            keywords = ["老字号", "本地菜", "特色餐厅"] + keywords
+        if slot == "snack":
+            keywords = ["小吃街", "夜市"] + keywords
+    if "夜景" in normalized and slot in {"dinner", "snack"}:
+        keywords = ["夜景餐厅", "江景餐厅"] + keywords
+    if "海边" in normalized and slot in {"lunch", "dinner"}:
+        keywords = ["海鲜", "海景餐厅"] + keywords
+    if "情侣" in normalized and slot == "dinner":
+        keywords = ["约会餐厅", "景观餐厅"] + keywords
+
+    unique_keywords: List[str] = []
+    for keyword in keywords:
+        if keyword not in unique_keywords:
+            unique_keywords.append(keyword)
+    return unique_keywords
+
+
 def _parse_rating(poi: Dict) -> Optional[float]:
     rating = poi.get("rating")
     if rating in (None, "", []):
@@ -134,7 +169,7 @@ def ensure_day_meals(
     )
 
 
-def get_meal_candidates(destination: str) -> Dict[str, List[MealInfo]]:
+def get_meal_candidates(destination: str, preferences: Optional[List[str]] = None) -> Dict[str, List[MealInfo]]:
     results: Dict[str, List[MealInfo]] = {slot: [] for slot in MEAL_SLOTS}
     tools = get_tool_provider()
 
@@ -143,7 +178,7 @@ def get_meal_candidates(destination: str) -> Dict[str, List[MealInfo]]:
             unique_meals: List[MealInfo] = []
             seen = set()
 
-            for keyword in MEAL_SLOT_CONFIG[slot]["keywords"]:
+            for keyword in _keywords_for_slot(slot, preferences):
                 pois = tools.search_pois(keywords=keyword, city=destination, page_size=6)
                 for poi in pois:
                     meal = _poi_to_meal(slot, poi, destination)

@@ -5,7 +5,7 @@ from app.tools.provider import get_tool_provider
 from app.utils.config import IMAGE_LOOKUP_LIMIT
 
 
-MAX_ATTRACTIONS = 5
+MAX_ATTRACTIONS = 12
 
 PREFERENCE_ALIASES = {
     "history": "历史",
@@ -362,7 +362,7 @@ def get_attractions(destination: str, preferences: List[str]) -> List[Attraction
 
     try:
         for keyword in keywords:
-            pois = tools.search_pois(keywords=keyword, city=destination, page_size=6)
+            pois = tools.search_pois(keywords=keyword, city=destination, page_size=8)
             for poi in pois:
                 attraction = _poi_to_attraction(poi, destination)
                 if not attraction:

@@ -67,6 +67,14 @@ export interface WeatherInfo {
   temperature: string;
 }
 
+export interface ParsedPreferences {
+  interests: string[];
+  pace?: string | null;
+  mobility?: string | null;
+  scene: string[];
+  group_type?: string | null;
+}
+
 export interface TransportationInfo {
   mode: string;
   route_summary: string;
@@ -95,6 +103,7 @@ export interface MapAttractionPoint {
   address: string;
   location: Location;
   category?: string | null;
+  sequenceLabel?: string;
 }
 
 export interface TripPlanResponse {
@@ -105,4 +114,5 @@ export interface TripPlanResponse {
   daily_plan: DayPlan[];
   generation_source: "llm" | "fallback";
   fallback_reason?: string | null;
+  parsed_preferences?: ParsedPreferences | null;
 }

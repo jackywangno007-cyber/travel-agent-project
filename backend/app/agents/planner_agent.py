@@ -82,23 +82,31 @@ def _build_target_counts(day_count: int, attraction_count: int) -> List[int]:
     if day_count <= 0:
         return []
 
-    targets = [1] * day_count
-    remaining = max(attraction_count - day_count, 0)
+    if attraction_count <= 0:
+        return [0] * day_count
 
-    for idx in range(day_count):
-        if remaining <= 0:
-            break
-        targets[idx] += 1
-        remaining -= 1
+    baseline = 2 if attraction_count >= day_count * 2 else 1
+    targets = [baseline] * day_count
+    allocated = baseline * day_count
 
-    for idx in range(day_count):
-        if remaining <= 0:
-            break
-        if targets[idx] < 3:
-            targets[idx] += 1
-            remaining -= 1
+    if allocated > attraction_count:
+        overflow = allocated - attraction_count
+        for idx in range(day_count - 1, -1, -1):
+            if overflow <= 0:
+                break
+            if targets[idx] > 1:
+                targets[idx] -= 1
+                overflow -= 1
+    else:
+        remaining = attraction_count - allocated
+        for idx in range(day_count):
+            if remaining <= 0:
+                break
+            if targets[idx] < 3:
+                targets[idx] += 1
+                remaining -= 1
 
-    return targets
+    return [max(0, min(3, target)) for target in targets]
 
 
 def _build_default_theme(day_attractions: List[AttractionInfo], day_index: int) -> str:
@@ -181,6 +189,28 @@ def _extract_selected_names(day: Dict[str, Any]) -> List[str]:
     return []
 
 
+def _distance_to_day_km(
+    candidate: str,
+    current_names: List[str],
+    attraction_map: Dict[str, AttractionInfo],
+) -> float:
+    if not current_names:
+        return 0.0
+
+    candidate_attraction = attraction_map.get(candidate)
+    if not candidate_attraction:
+        return float("inf")
+
+    distances = [
+        _haversine_km(candidate_attraction, attraction_map[name])
+        for name in current_names
+        if name in attraction_map
+    ]
+    if not distances:
+        return 0.0
+    return min(distances)
+
+
 def _candidate_score(
     candidate: str,
     current_names: List[str],
@@ -195,8 +225,12 @@ def _candidate_score(
     }
     category = attraction_map[candidate].category
     category_penalty = 1 if category and category in current_categories else 0
+    distance_km = _distance_to_day_km(candidate, current_names, attraction_map)
+    distance_penalty = 1 if distance_km > 8 else 0
     return (
         category_penalty,
+        distance_penalty,
+        round(distance_km, 2),
         usage_counts.get(candidate, 0),
         attraction_order.get(candidate, 10**6),
     )
@@ -394,6 +428,22 @@ def _route_distance_km(day_attractions: List[AttractionInfo]) -> float:
     return total
 
 
+def _order_day_attractions(day_attractions: List[AttractionInfo]) -> List[AttractionInfo]:
+    if len(day_attractions) <= 2:
+        return day_attractions
+
+    remaining = day_attractions[1:]
+    ordered = [day_attractions[0]]
+
+    while remaining:
+        current = ordered[-1]
+        next_attraction = min(remaining, key=lambda item: _haversine_km(current, item))
+        ordered.append(next_attraction)
+        remaining.remove(next_attraction)
+
+    return ordered
+
+
 def _has_bad_weather(weather: Optional[WeatherInfo]) -> bool:
     if not weather:
         return False
@@ -492,12 +542,25 @@ def _build_fallback_trip_plan(
     if day_count == 0:
         raise ValueError("缺少天气信息，无法构建行程")
 
-    base_per_day = max(1, len(attractions) // day_count) if attractions else 1
+    targets = _build_target_counts(day_count, len(attractions))
+    ordered_names = [item.name for item in attractions]
+    initial_day_names: List[List[str]] = []
+    cursor = 0
+
+    for target in targets:
+        if cursor >= len(ordered_names):
+            initial_day_names.append([])
+            continue
+        next_cursor = min(cursor + max(target, 1), len(ordered_names))
+        initial_day_names.append(ordered_names[cursor:next_cursor])
+        cursor = next_cursor
+
+    balanced_day_names = _rebalance_day_names(initial_day_names, attractions)
+    attraction_map = {item.name: item for item in attractions}
 
     for idx, weather in enumerate(weather_list, start=1):
-        start = (idx - 1) * base_per_day
-        end = start + base_per_day
-        day_attractions = attractions[start:end]
+        selected_names = balanced_day_names[idx - 1] if idx - 1 < len(balanced_day_names) else []
+        day_attractions = [attraction_map[name] for name in selected_names if name in attraction_map]
 
         if not day_attractions and attractions:
             day_attractions = [attractions[(idx - 1) % len(attractions)]]
@@ -509,16 +572,17 @@ def _build_fallback_trip_plan(
             snack=_fallback_meal_for_slot("snack", idx, meal_candidates),
         )
 
-        theme = _build_default_theme(day_attractions, idx)
-        transportation = _build_transportation(idx, day_attractions, weather, hotel)
-        estimated_cost = _compute_estimated_cost(day_attractions, day_meals, hotel)
+        ordered_day_attractions = _order_day_attractions(day_attractions)
+        theme = _build_default_theme(ordered_day_attractions, idx)
+        transportation = _build_transportation(idx, ordered_day_attractions, weather, hotel)
+        estimated_cost = _compute_estimated_cost(ordered_day_attractions, day_meals, hotel)
 
         daily_plan.append(
             DayPlan(
                 day=idx,
                 date=weather.date,
                 theme=theme,
-                attractions=day_attractions,
+                attractions=ordered_day_attractions,
                 meals=day_meals,
                 transportation=transportation,
                 hotel=hotel,
@@ -609,7 +673,9 @@ def _convert_llm_result_to_response(
         if not selected_names:
             raise ValueError(f"第 {idx} 天无法匹配到可用景点")
 
-        selected_attractions = [attraction_map[name] for name in selected_names]
+        selected_attractions = _order_day_attractions(
+            [attraction_map[name] for name in selected_names]
+        )
         weather = weather_map[date]
         day_meals = _resolve_day_meals(
             {"meals": day_info.get("meals")},

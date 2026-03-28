@@ -1,46 +1,44 @@
 # Travel Agent Project
 
-一个面向春招展示的智能旅行助手项目。  
-项目以“多 Agent + 工具层 + 前后端分离”的方式实现完整旅行规划链路，支持从用户输入出发，生成包含景点、天气、酒店、餐饮、交通、地图、预算和可编辑行程的旅行计划。
+一个自己从 0 到 1 持续迭代的智能旅行助手项目。
+
+这个项目围绕“输入旅行需求 -> 生成可执行旅行计划 -> 地图与预算联动 -> 支持编辑、重规划与导出”这条完整链路展开，目标不是只生成一段推荐文案，而是做出一个更接近真实产品体验的 AI 旅行规划工具。
 
 ---
 
-## 1. 项目简介
+## 项目简介
 
-本项目希望解决“旅行规划信息分散、手动整合成本高”的问题。  
-用户输入出发地、目的地、日期、预算和偏好后，系统会自动生成多天旅行计划，并给出：
+用户输入出发地、目的地、日期、预算和偏好后，系统会自动生成包含以下信息的多日旅行计划：
 
 - 每日景点安排
 - 真实天气信息
 - 酒店推荐
 - 餐饮安排
 - 轻量交通建议
-- 地图可视化
+- 地图点位与路线可视化
 - 预算拆分
-- 导出 PDF / 图片
-- 单日重规划
+- 可编辑、可重规划、可导出的结果页
 
-项目不仅关注“生成结果”，也强调“可交互性”和“可落地执行”，因此在结果页中加入了编辑、重规划、地图联动和预算实时更新等能力。
-
----
-
-## 2. 核心功能列表
-
-- 基于用户偏好的多天旅行计划生成
-- 景点搜索：接入高德 POI 搜索，返回真实景点名称、地址和坐标
-- 天气服务：接入真实天气 API，并提供 fallback 兜底
-- 酒店推荐：基于真实 POI 搜索 + 规则估算价格
-- 餐饮安排：支持早餐 / 午餐 / 晚餐 / 小吃候选与 fallback
-- 交通建议：基于景点顺序、距离和天气生成轻量路线说明
-- 地图展示：高德地图打点、按天高亮、marker 信息查看
-- 预算管理：拆分酒店 / 门票 / 餐饮 / 其他预估
-- 行程编辑：删除景点、同日内排序、局部预算联动
-- 单日重规划：只替换某一天 DayPlan，不重跑整份行程
-- 导出功能：支持导出 PNG 和 PDF
+整个项目采用前后端分离结构，后端通过多 Agent + 外部服务的方式组织能力，前端负责结果可视化、交互编辑和导出体验。
 
 ---
 
-## 3. 技术栈
+## 核心功能
+
+- 基于用户输入自动生成多日旅行计划
+- 接入真实景点搜索，返回景点名称、地址、坐标、分类等信息
+- 接入真实天气服务，并提供 fallback 兜底
+- 酒店推荐支持真实 POI 搜索 + 规则估算价格
+- 餐饮安排支持早餐 / 午餐 / 晚餐 / 小吃
+- 支持地图打点、路线高亮、按天查看路线
+- 支持预算拆分：酒店 / 门票 / 餐饮 / 其他
+- 支持删除景点、调整顺序、单日重规划
+- 支持导出图片和 PDF
+- 支持 Day Detail 单日详情页
+
+---
+
+## 技术栈
 
 ### 前端
 
@@ -57,7 +55,7 @@
 - FastAPI
 - Pydantic
 - Uvicorn
-- OpenAI / DeepSeek 兼容 LLM 接口
+- OpenAI / DeepSeek 兼容大模型接口
 - Python 标准库 HTTP 请求
 
 ### 外部服务
@@ -68,47 +66,47 @@
 
 ---
 
-## 4. 系统架构
+## 系统架构
 
-项目采用前后端分离架构，后端内部按 `API -> Orchestrator -> Agents -> Services / Tools` 分层组织。
+项目后端按 `API -> Orchestrator -> Agents -> Services / Tools` 分层组织，前端按“页面 + 组件 + store”组织状态与交互。
 
 ### 前端
 
 - `Home.vue`
-  - 收集用户输入并发起旅行计划请求
+  - 收集用户需求并发起旅行计划生成
 - `Result.vue`
-  - 负责结果页总览、地图、预算、锚点导航和单日重规划
+  - 展示总览、预算、地图、每日行程、导出入口
 - `DayCard.vue`
-  - 展示单日行程、餐饮、交通、酒店、预算拆分
-- `MapView.vue`
-  - 地图渲染与按天高亮
+  - 渲染每日行程摘要与展开内容
+- `DayDetail.vue`
+  - 展示单日完整 itinerary 页面
 - `stores/trip.ts`
-  - 管理可编辑行程状态、预算重算和本地持久化
+  - 管理可编辑 trip plan、预算重算与 sessionStorage 恢复
 
 ### 后端
 
 - `api/trip.py`
-  - 提供整程生成与单日重规划接口
+  - 提供完整行程生成和单日重规划接口
 - `orchestrators/trip_orchestrator.py`
-  - 负责聚合景点、天气、酒店、餐饮，并调用 Planner
+  - 串联景点、天气、酒店、餐饮、planner 等模块
 - `agents/`
   - `attraction_agent.py`：景点候选生成
   - `weather_agent.py`：天气查询
   - `hotel_agent.py`：酒店推荐
   - `meal_agent.py`：餐饮候选生成
-  - `planner_agent.py`：调用大模型并进行结果后处理
+  - `planner_agent.py`：大模型规划与后处理
 - `services/`
-  - 高德 POI、天气、图片、LLM 请求封装
+  - 封装 POI、天气、图片、LLM 请求能力
 - `tools/provider.py`
-  - 统一工具入口，为后续 MCP 风格迁移做准备
+  - 作为共享工具入口，为后续更 MCP 风格的工具接入预留结构
 
 更多说明见 [architecture.md](./docs/architecture.md)。
 
 ---
 
-## 5. 项目运行方法
+## 本地运行
 
-### 5.1 启动后端
+### 启动后端
 
 ```powershell
 cd backend
@@ -118,19 +116,19 @@ pip install -r requirements.txt
 python run.py
 ```
 
-默认后端地址：
+默认地址：
 
 ```text
 http://127.0.0.1:8000
 ```
 
-Swagger 文档：
+接口文档：
 
 ```text
 http://127.0.0.1:8000/docs
 ```
 
-### 5.2 启动前端
+### 启动前端
 
 ```powershell
 cd frontend
@@ -138,7 +136,7 @@ npm install
 npm run dev
 ```
 
-默认前端地址：
+默认地址：
 
 ```text
 http://127.0.0.1:5173
@@ -146,100 +144,216 @@ http://127.0.0.1:5173
 
 ---
 
-## 6. 环境变量说明
+## 环境变量说明
 
 ### 后端 `.env`
 
 参考 [backend/.env.example](./backend/.env.example)
 
-常用变量：
-
 ```env
-AMAP_API_KEY=
+APP_ENV=development
+APP_HOST=127.0.0.1
+APP_PORT=8000
+OPEN_BROWSER_ON_START=true
+CORS_ALLOW_ORIGINS=http://127.0.0.1:5173,http://localhost:5173
+
 OPENAI_API_KEY=
 OPENAI_BASE_URL=
 OPENAI_MODEL=
+
+AMAP_API_KEY=
 WEATHER_API_TIMEOUT_SECONDS=10
+
 UNSPLASH_ACCESS_KEY=
 IMAGE_API_TIMEOUT_SECONDS=8
 IMAGE_LOOKUP_LIMIT=3
 ```
-
-说明：
-
-- `AMAP_API_KEY`：高德 Web Service API Key，用于 POI 搜索
-- `OPENAI_API_KEY / OPENAI_BASE_URL / OPENAI_MODEL`：大模型配置
-- `UNSPLASH_ACCESS_KEY`：景点图片搜索
 
 ### 前端 `.env`
 
 参考 [frontend/.env.example](./frontend/.env.example)
 
 ```env
+VITE_API_BASE_URL=
 VITE_AMAP_API_KEY=
 VITE_AMAP_SECURITY_JS_CODE=
 ```
 
 说明：
 
-- `VITE_AMAP_API_KEY`：高德 JS API Key
-- `VITE_AMAP_SECURITY_JS_CODE`：高德安全密钥
+- `VITE_API_BASE_URL`
+  - 本地开发可以留空，使用 Vite 代理访问 `/api`
+  - 部署到 Vercel 后，需要填写 Render 后端公网地址，例如 `https://your-backend.onrender.com`
+- `VITE_AMAP_API_KEY`
+  - 高德 JS API Key
+- `VITE_AMAP_SECURITY_JS_CODE`
+  - 高德安全密钥
 
 ---
 
-## 7. API 说明
+## 部署说明
 
-当前核心接口包括：
+推荐采用下面这套最轻量的上线方案：
 
-- `POST /api/trip/plan`
-  - 生成整份旅行计划
-- `POST /api/trip/regenerate-day`
-  - 单日重规划，只返回某一天新的 `DayPlan`
+- frontend：部署到 Vercel
+- backend：部署到 Render
 
-可进一步查看 [docs/api.md](./docs/api.md)。
+这样前端是静态站点，后端是独立 API 服务，适合公开分享和后续继续迭代。
+
+### 1. 前端部署到 Vercel
+
+建议把 Vercel 项目的 Root Directory 设置为：
+
+```text
+frontend
+```
+
+构建配置：
+
+- Framework Preset：`Vite`
+- Build Command：`npm run build`
+- Output Directory：`dist`
+
+前端需要在 Vercel 配置这些环境变量：
+
+```env
+VITE_API_BASE_URL=https://你的-render-后端域名
+VITE_AMAP_API_KEY=你的高德JSAPI Key
+VITE_AMAP_SECURITY_JS_CODE=你的高德安全密钥
+```
+
+其中 `VITE_API_BASE_URL` 必须指向 Render 部署后的后端地址，例如：
+
+```text
+https://travel-agent-backend.onrender.com
+```
+
+### 2. 后端部署到 Render
+
+建议在 Render 创建一个 `Web Service`，并把 Root Directory 设置为：
+
+```text
+backend
+```
+
+构建和启动配置：
+
+- Build Command：`pip install -r requirements.txt`
+- Start Command：`uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+
+后端需要在 Render 配置这些环境变量：
+
+```env
+APP_ENV=production
+OPEN_BROWSER_ON_START=false
+CORS_ALLOW_ORIGINS=https://你的-vercel-前端域名
+
+OPENAI_API_KEY=
+OPENAI_BASE_URL=
+OPENAI_MODEL=
+
+AMAP_API_KEY=
+WEATHER_API_TIMEOUT_SECONDS=10
+
+UNSPLASH_ACCESS_KEY=
+IMAGE_API_TIMEOUT_SECONDS=8
+IMAGE_LOOKUP_LIMIT=3
+```
+
+其中 `CORS_ALLOW_ORIGINS` 至少要包含你的前端 Vercel 域名，例如：
+
+```text
+https://travel-agent-project.vercel.app
+```
+
+如果后面绑定自定义域名，也要一并加进去，多个域名用英文逗号分隔。
+
+### 3. 前后端如何连通
+
+上线顺序建议是：
+
+1. 先部署后端到 Render
+2. 拿到 Render 后端公网地址
+3. 再部署前端到 Vercel
+4. 在 Vercel 配置 `VITE_API_BASE_URL`
+5. 重新触发前端部署
+
+这样前端就会把所有 API 请求发到线上后端，而不再访问本地地址。
+
+### 4. Vue Router 刷新问题
+
+项目前端使用了 Vue Router history 模式，所以部署到 Vercel 时需要保留 SPA rewrite 配置。
+
+仓库中已经提供：
+
+- [frontend/vercel.json](./frontend/vercel.json)
+
+它会把非静态资源请求回退到 `index.html`，避免刷新 `/result` 或 `/trip/day/:dayIndex` 时出现 404。
 
 ---
 
-## 8. 演示说明
+## 上线后测试顺序
 
-建议录制或截图以下演示路径：
+建议按这个顺序验证：
+
+1. 打开前端首页  
+   确认首页能正常打开，样式和静态资源正常加载。
+
+2. 测试后端连通  
+   在前端输入一组简单参数，确认不会出现“无法连接后端服务”。
+
+3. 测试生成旅行计划  
+   看是否能成功进入结果页，说明前后端 API 已经打通。
+
+4. 测试地图  
+   看地图能否正常加载 marker 和路线高亮。
+
+5. 测试导出  
+   试一次导出 PNG 和 PDF，确认不会因为公网部署而异常。
+
+6. 测试详情页刷新  
+   进入 `/trip/day/:dayIndex` 后手动刷新页面，确认仍可恢复当前行程数据。
+
+7. 测试跨域  
+   如果前端能请求后端、但浏览器控制台报 CORS 错误，优先检查 Render 的 `CORS_ALLOW_ORIGINS` 是否填写正确。
+
+---
+
+## 演示说明
+
+推荐录制或截图以下几个典型流程：
 
 1. 首页输入旅行需求并生成完整行程
-2. 结果页展示总览、预算、地图、DayCard
+2. 结果页展示总览、预算、地图和每日行程
 3. 删除景点 / 调整顺序，观察地图与预算联动
 4. 点击“重规划当天”，只替换某一天
 5. 导出 PNG / PDF
+6. 点击某一天进入 Day Detail 页面
 
-截图建议放在：
+可将截图放在：
 
 - `docs/demo_screenshots/home.png`
 - `docs/demo_screenshots/result-overview.png`
 - `docs/demo_screenshots/day-card.png`
+- `docs/demo_screenshots/day-detail.png`
 - `docs/demo_screenshots/map.png`
 
-README 中可后续补成：
+---
 
-```md
-![Home](./docs/demo_screenshots/home.png)
-![Result](./docs/demo_screenshots/result-overview.png)
-```
+## 项目亮点
+
+- 从“生成文本”推进到“可编辑、可重规划、可导出”的完整旅行助手体验
+- 把景点、天气、酒店、餐饮、交通、预算、地图串成统一数据链路
+- 通过 `planner_agent + 后处理规则 + fallback` 提升大模型结果稳定性
+- 支持地图路线高亮、单日详情页、预算联动、导出等偏产品化能力
+- 工具层已开始抽象，为后续向更 MCP 风格的集成方式演进留出空间
 
 ---
 
-## 9. 项目亮点
-
-- 从“生成式 demo”推进到“可编辑、可重规划、可导出”的完整旅行助手产品形态
-- 将景点、天气、酒店、餐饮、交通、预算、地图串成统一数据链路
-- 通过 `planner_agent + 后处理规则` 提升大模型结果稳定性
-- 通过共享 `ToolProvider` 保持项目稳定运行，同时为后续 MCP 风格迁移预留结构
-
----
-
-## 10. 后续可继续扩展
+## 后续可以继续扩展
 
 - 历史记录与多次方案管理
-- 更细粒度的预算明细
-- 真正的路线规划 API 接入
-- 更多偏好控制，例如亲子游 / 特种兵 / 雨天优先
-- MCP 化工具接入与多 Agent 协作增强
-
+- 更细颗粒度的预算明细
+- 更真实的路线规划 API 接入
+- 更丰富的偏好理解与行程风格控制
+- 更完整的工具层抽象与 Agent 协作能力

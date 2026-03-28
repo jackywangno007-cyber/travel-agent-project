@@ -3,7 +3,7 @@
     <div class="map-header">
       <div>
         <h3>景点地图</h3>
-        <p>点击标记查看景点名称、地址和所属天数，点击某一天卡片可高亮当天路线。</p>
+        <p>地图会根据每天景点顺序绘制轻量路线。点击某一天可高亮当天路线，点击景点卡片可定位到对应站点。</p>
       </div>
 
       <button
@@ -16,7 +16,7 @@
       </button>
     </div>
 
-    <p v-if="activeDay !== null" class="map-tip">当前高亮：Day {{ activeDay }}</p>
+    <p v-if="activeDay !== null" class="map-tip">当前高亮：Day {{ activeDay }} 路线</p>
     <p v-if="errorMessage" class="map-error">{{ errorMessage }}</p>
     <div v-else ref="mapRef" class="map-container"></div>
   </div>
@@ -30,6 +30,7 @@ import type { MapAttractionPoint } from "../types";
 const props = defineProps<{
   points: MapAttractionPoint[];
   activeDay: number | null;
+  focusedPointKey: string | null;
 }>();
 
 defineEmits<{
@@ -43,6 +44,18 @@ interface AMapMarker {
   setMap: (map: AMapMap | null) => void;
   setzIndex: (value: number) => void;
   setContent: (content: string) => void;
+  getPosition: () => { lng: number; lat: number };
+}
+
+interface AMapPolyline {
+  setMap: (map: AMapMap | null) => void;
+  setOptions: (options: {
+    strokeColor?: string;
+    strokeWeight?: number;
+    strokeOpacity?: number;
+    strokeStyle?: "solid" | "dashed";
+    zIndex?: number;
+  }) => void;
 }
 
 interface AMapInfoWindow {
@@ -54,9 +67,9 @@ interface AMapTileLayer {
 }
 
 interface AMapMap {
-  add: (markers: AMapMarker[]) => void;
+  add: (items: Array<AMapMarker | AMapPolyline>) => void;
   clearMap: () => void;
-  setFitView: (items?: AMapMarker[]) => void;
+  setFitView: (items?: Array<AMapMarker | AMapPolyline>) => void;
   setCenter: (center: AMapLngLat) => void;
   destroy: () => void;
 }
@@ -77,6 +90,16 @@ interface AMapConstructor {
     content?: string;
     offset?: [number, number];
   }) => AMapMarker;
+  Polyline: new (options: {
+    path: AMapLngLat[];
+    strokeColor?: string;
+    strokeWeight?: number;
+    strokeOpacity?: number;
+    strokeStyle?: "solid" | "dashed";
+    lineJoin?: string;
+    lineCap?: string;
+    zIndex?: number;
+  }) => AMapPolyline;
   InfoWindow: new (options: { content: string; offset?: [number, number] }) => AMapInfoWindow;
   TileLayer: new () => AMapTileLayer;
 }
@@ -99,6 +122,7 @@ let mapInstance: AMapMap | null = null;
 let scriptLoadingPromise: Promise<AMapConstructor> | null = null;
 let amapConstructor: AMapConstructor | null = null;
 let markerEntries: Array<{ marker: AMapMarker; point: MapAttractionPoint }> = [];
+let polylineEntries: Array<{ day: number; polyline: AMapPolyline }> = [];
 
 function dayColor(day: number) {
   return DAY_COLORS[(day - 1) % DAY_COLORS.length];
@@ -113,10 +137,10 @@ function escapeHtml(value: string) {
     .replaceAll("'", "&#39;");
 }
 
-function buildMarkerContent(point: MapAttractionPoint, isActive: boolean) {
+function buildMarkerContent(point: MapAttractionPoint, isActive: boolean, isFocused: boolean) {
   const color = dayColor(point.day);
-  const scale = isActive ? 1 : 0.9;
-  const opacity = isActive ? 1 : 0.35;
+  const scale = isFocused ? 1.08 : isActive ? 1 : 0.9;
+  const opacity = isFocused ? 1 : isActive ? 1 : 0.3;
   return `
     <div style="
       display:flex;
@@ -128,9 +152,9 @@ function buildMarkerContent(point: MapAttractionPoint, isActive: boolean) {
       transition:transform 0.18s ease, opacity 0.18s ease;
     ">
       <div style="
-        min-width:26px;
-        height:26px;
-        padding:0 8px;
+        min-width:52px;
+        height:28px;
+        padding:0 10px;
         border-radius:999px;
         background:${color};
         color:#fff;
@@ -139,9 +163,9 @@ function buildMarkerContent(point: MapAttractionPoint, isActive: boolean) {
         display:flex;
         align-items:center;
         justify-content:center;
-        box-shadow:0 6px 14px rgba(0,0,0,0.18);
+        box-shadow:${isFocused ? "0 10px 22px rgba(0,0,0,0.22)" : "0 6px 14px rgba(0,0,0,0.18)"};
         border:2px solid #fff;
-      ">D${point.day}-${point.orderInDay}</div>
+      ">${escapeHtml(point.sequenceLabel ?? ("第" + point.orderInDay + "站"))}</div>
       <div style="
         width:0;
         height:0;
@@ -156,11 +180,13 @@ function buildMarkerContent(point: MapAttractionPoint, isActive: boolean) {
 
 function buildInfoContent(point: MapAttractionPoint) {
   return `
-    <div style="padding:8px 10px; max-width:260px; line-height:1.6;">
+    <div style="padding:8px 10px; max-width:280px; line-height:1.6;">
       <div style="font-size:15px; font-weight:700; margin-bottom:4px;">
         ${escapeHtml(point.name)}
       </div>
-      <div style="color:#4b5563; margin-bottom:4px;">Day ${point.day} | ${escapeHtml(point.date)}</div>
+      <div style="color:#4b5563; margin-bottom:4px;">
+        Day ${point.day} | ${escapeHtml(point.date)} | ${escapeHtml(point.sequenceLabel ?? ("第" + point.orderInDay + "站"))}
+      </div>
       <div style="color:#111827;">${escapeHtml(point.address)}</div>
     </div>
   `;
@@ -228,8 +254,8 @@ function createMarker(AMap: AMapConstructor, point: MapAttractionPoint) {
   const marker = new AMap.Marker({
     position,
     title: point.name,
-    content: buildMarkerContent(point, true),
-    offset: [-16, -38],
+    content: buildMarkerContent(point, true, false),
+    offset: [-26, -40],
   });
 
   const infoWindow = new AMap.InfoWindow({
@@ -242,6 +268,49 @@ function createMarker(AMap: AMapConstructor, point: MapAttractionPoint) {
   });
 
   return marker;
+}
+
+function renderPolylines(AMap: AMapConstructor) {
+  if (!mapInstance) {
+    return;
+  }
+
+  polylineEntries = [];
+  const grouped = new Map<number, MapAttractionPoint[]>();
+
+  props.points.forEach((point) => {
+    const points = grouped.get(point.day) ?? [];
+    points.push(point);
+    grouped.set(point.day, points);
+  });
+
+  grouped.forEach((points, day) => {
+    const ordered = [...points].sort((a, b) => a.orderInDay - b.orderInDay);
+    if (ordered.length < 2) {
+      return;
+    }
+
+    const path = ordered.map(
+      (point) => [point.location.longitude, point.location.latitude] as AMapLngLat
+    );
+
+    const polyline = new AMap.Polyline({
+      path,
+      strokeColor: dayColor(day),
+      strokeWeight: 5,
+      strokeOpacity: 0.42,
+      strokeStyle: "solid",
+      lineJoin: "round",
+      lineCap: "round",
+      zIndex: 70,
+    });
+
+    polylineEntries.push({ day, polyline });
+  });
+
+  if (polylineEntries.length > 0) {
+    mapInstance.add(polylineEntries.map((entry) => entry.polyline));
+  }
 }
 
 function applyHighlight() {
@@ -258,14 +327,47 @@ function applyHighlight() {
 
   markerEntries.forEach((entry) => {
     const isActive = props.activeDay === null || entry.point.day === props.activeDay;
-    entry.marker.setContent(buildMarkerContent(entry.point, isActive));
-    entry.marker.setzIndex(isActive ? 120 : 90);
+    const isFocused = props.focusedPointKey === `${entry.point.day}-${entry.point.orderInDay}`;
+    entry.marker.setContent(buildMarkerContent(entry.point, isActive, isFocused));
+    entry.marker.setzIndex(isFocused ? 160 : isActive ? 120 : 90);
   });
 
-  if (activeMarkers.length > 0) {
-    mapInstance.setFitView(activeMarkers);
-  } else {
-    mapInstance.setFitView(markerEntries.map((entry) => entry.marker));
+  polylineEntries.forEach((entry) => {
+    const isActive = props.activeDay === null || entry.day === props.activeDay;
+    entry.polyline.setOptions({
+      strokeColor: dayColor(entry.day),
+      strokeWeight: isActive ? 6 : 4,
+      strokeOpacity: isActive ? 0.85 : 0.18,
+      zIndex: isActive ? 110 : 60,
+    });
+  });
+
+  const activeOverlays =
+    activeMarkers.length > 0
+      ? [
+          ...activeMarkers,
+          ...polylineEntries
+            .filter((entry) => props.activeDay === null || entry.day === props.activeDay)
+            .map((entry) => entry.polyline),
+        ]
+      : [
+          ...markerEntries.map((entry) => entry.marker),
+          ...polylineEntries.map((entry) => entry.polyline),
+        ];
+
+  if (activeOverlays.length > 0) {
+    mapInstance.setFitView(activeOverlays);
+  }
+
+  if (props.focusedPointKey) {
+    const focused = markerEntries.find(
+      (entry) => `${entry.point.day}-${entry.point.orderInDay}` === props.focusedPointKey
+    );
+    if (focused) {
+      const position = focused.marker.getPosition();
+      mapInstance.setCenter([position.lng, position.lat]);
+      focused.marker.setzIndex(180);
+    }
   }
 }
 
@@ -279,11 +381,16 @@ function renderMarkers(AMap: AMapConstructor) {
     point,
     marker: createMarker(AMap, point),
   }));
+  renderPolylines(AMap);
 
-  const markers = markerEntries.map((entry) => entry.marker);
-  if (markers.length > 0) {
-    mapInstance.add(markers);
-    mapInstance.setFitView(markers);
+  const overlays = [
+    ...markerEntries.map((entry) => entry.marker),
+    ...polylineEntries.map((entry) => entry.polyline),
+  ];
+
+  if (overlays.length > 0) {
+    mapInstance.add(overlays);
+    mapInstance.setFitView(overlays);
     applyHighlight();
   }
 }
@@ -338,7 +445,7 @@ watch(
 );
 
 watch(
-  () => props.activeDay,
+  () => [props.activeDay, props.focusedPointKey],
   () => {
     if (amapConstructor && markerEntries.length > 0) {
       applyHighlight();
@@ -355,16 +462,19 @@ onBeforeUnmount(() => {
   mapInstance = null;
   amapConstructor = null;
   markerEntries = [];
+  polylineEntries = [];
 });
 </script>
 
 <style scoped>
 .map-card {
-  background: white;
-  padding: 20px;
-  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.94);
+  padding: 22px;
+  border-radius: 24px;
   margin-bottom: 24px;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(219, 234, 254, 0.92);
+  box-shadow: 0 22px 54px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(12px);
 }
 
 .map-header {
@@ -376,44 +486,68 @@ onBeforeUnmount(() => {
 
 .map-header h3 {
   margin: 0 0 8px;
+  font-size: 24px;
+  letter-spacing: -0.02em;
 }
 
 .map-header p {
   margin: 0 0 12px;
-  color: #666;
+  color: #64748b;
+  line-height: 1.7;
 }
 
 .reset-button {
-  padding: 8px 12px;
+  padding: 10px 14px;
   border: none;
-  border-radius: 10px;
-  background: #1677ff;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #1677ff 0%, #1d4ed8 100%);
   color: white;
   cursor: pointer;
+  font-weight: 700;
+  box-shadow: 0 14px 28px rgba(29, 78, 216, 0.18);
 }
 
 .map-tip {
-  margin: 0 0 12px;
+  margin: 0 0 14px;
   color: #1d4ed8;
   font-weight: 600;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: #eff6ff;
+  border: 1px solid rgba(191, 219, 254, 0.92);
 }
 
 .map-container {
   width: 100%;
-  height: 360px;
-  border-radius: 12px;
+  height: 380px;
+  border-radius: 18px;
   overflow: hidden;
-  background: #eef3f8;
+  background: linear-gradient(180deg, #eef3f8 0%, #e7eef8 100%);
+  border: 1px solid rgba(226, 232, 240, 0.8);
 }
 
 .map-error {
   margin: 0;
   color: #d93025;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: #fef2f2;
+  border: 1px solid rgba(254, 202, 202, 0.9);
+  line-height: 1.7;
 }
 
 @media (max-width: 640px) {
+  .map-card {
+    padding: 18px;
+    border-radius: 20px;
+  }
+
   .map-header {
     flex-direction: column;
+  }
+
+  .map-container {
+    height: 320px;
   }
 }
 </style>

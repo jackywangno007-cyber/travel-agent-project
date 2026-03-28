@@ -60,10 +60,12 @@ function formatMoney(value: number) {
 
 <style scoped>
 .budget-panel {
-  background: white;
-  padding: 20px;
-  border-radius: 18px;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.94);
+  padding: 24px;
+  border-radius: 26px;
+  border: 1px solid rgba(219, 234, 254, 0.9);
+  box-shadow: 0 22px 54px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(12px);
 }
 
 .panel-head {
@@ -71,11 +73,13 @@ function formatMoney(value: number) {
   justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
-  margin-bottom: 18px;
+  margin-bottom: 20px;
 }
 
 .panel-head h3 {
   margin: 0 0 8px;
+  font-size: 24px;
+  letter-spacing: -0.02em;
 }
 
 .panel-head p {
@@ -86,10 +90,12 @@ function formatMoney(value: number) {
 
 .total-box {
   min-width: 180px;
-  padding: 14px 16px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
   color: #1d4ed8;
+  border: 1px solid rgba(191, 219, 254, 0.92);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
 .total-label {
@@ -97,24 +103,34 @@ function formatMoney(value: number) {
   margin-bottom: 6px;
   font-size: 12px;
   color: #475569;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.total-box strong {
+  font-size: 30px;
+  letter-spacing: -0.03em;
 }
 
 .budget-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  gap: 16px;
 }
 
 .budget-card {
-  padding: 16px;
-  border-radius: 16px;
-  border: 1px solid #e5e7eb;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(226, 232, 240, 0.92);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.04);
 }
 
 .budget-card strong {
   display: block;
   margin: 8px 0;
-  font-size: 24px;
+  font-size: 28px;
+  letter-spacing: -0.03em;
 }
 
 .budget-card p {
@@ -125,24 +141,25 @@ function formatMoney(value: number) {
 
 .budget-label {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   color: #334155;
+  letter-spacing: 0.02em;
 }
 
 .hotel {
-  background: #f8fafc;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
 }
 
 .ticket {
-  background: #fff7ed;
+  background: linear-gradient(180deg, #fffaf4 0%, #fff7ed 100%);
 }
 
 .meal {
-  background: #fefce8;
+  background: linear-gradient(180deg, #fffef3 0%, #fefce8 100%);
 }
 
 .other {
-  background: #f0fdf4;
+  background: linear-gradient(180deg, #f7fff9 0%, #f0fdf4 100%);
 }
 
 @media (max-width: 860px) {
@@ -152,6 +169,11 @@ function formatMoney(value: number) {
 
   .budget-grid {
     grid-template-columns: 1fr;
+  }
+
+  .budget-panel {
+    padding: 20px;
+    border-radius: 22px;
   }
 }
 </style>
